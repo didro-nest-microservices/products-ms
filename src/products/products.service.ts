@@ -1,36 +1,29 @@
-import {
-  Injectable,
-  Logger,
-  NotFoundException,
-  OnModuleInit,
-} from '@nestjs/common';
-import { PrismaClient } from '@prisma/client';
+import { HttpStatus, Injectable } from '@nestjs/common';
+import { RpcException } from '@nestjs/microservices';
 import { PaginationDto } from 'src/common';
+import { PrismaService } from '../prisma.service';
 import { CreateProductDto } from './dto/create-product.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
 
 @Injectable()
-export class ProductsService extends PrismaClient implements OnModuleInit {
-  private readonly logger = new Logger('ProductService');
+export class ProductsService {
+  constructor(private prisma: PrismaService) {}
 
-  onModuleInit() {
-    this.$connect();
-    this.logger.log('Database connected');
-  }
-
-  create(createProductDto: CreateProductDto) {
-    return this.product.create({
+  async create(createProductDto: CreateProductDto) {
+    return await this.prisma.product.create({
       data: createProductDto,
     });
   }
 
   async findAll(paginationDto: PaginationDto) {
     const { page, limit } = paginationDto;
-    const total = await this.product.count({ where: { available: true } });
+    const total = await this.prisma.product.count({
+      where: { available: true },
+    });
     const lastPage = Math.ceil(total / limit);
 
     return {
-      data: await this.product.findMany({
+      data: await this.prisma.product.findMany({
         skip: (page - 1) * limit,
         take: limit,
         where: { available: true },
@@ -44,27 +37,47 @@ export class ProductsService extends PrismaClient implements OnModuleInit {
   }
 
   async findOne(id: number) {
-    const product = await this.product.findFirst({
+    const product = await this.prisma.product.findFirst({
       where: { id, available: true },
     });
 
     if (!product)
-      throw new NotFoundException(`Product whit id #${id} not found`);
+      throw new RpcException({
+        message: `Product whit id #${id} not found`,
+        status: HttpStatus.BAD_REQUEST,
+      });
 
     return product;
   }
 
-  async update(id: number, updateProductDto: UpdateProductDto) {
+  async update(updateProductDto: UpdateProductDto) {
+    const { id, ...data } = updateProductDto;
     await this.findOne(id);
-    return this.product.update({ where: { id }, data: updateProductDto });
+    return this.prisma.product.update({ where: { id }, data });
   }
 
   async remove(id: number) {
     await this.findOne(id);
     // return this.product.delete({ where: { id } });
-    return await this.product.update({
+    return await this.prisma.product.update({
       where: { id },
       data: { available: false },
     });
+  }
+
+  async validate(ids: number[]) {
+    ids = Array.from(new Set(ids));
+
+    const products = await this.prisma.product.findMany({
+      where: { id: { in: ids } },
+    });
+
+    if (products.length !== ids.length)
+      throw new RpcException({
+        message: 'Some products were not found',
+        status: HttpStatus.BAD_REQUEST,
+      });
+
+    return products;
   }
 }
