@@ -1,0 +1,18 @@
+steps:
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      [
+        'build',
+        '-t',
+        'southamerica-east1-docker.pkg.dev/shop-ms-482816/image-registry/products-ms-prd',
+        '--platform=linux/amd64',
+        '.',
+      ]
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      [
+        'push',
+        'southamerica-east1-docker.pkg.dev/shop-ms-482816/image-registry/products-ms-prd',
+      ]
+options:
+  logging: CLOUD_LOGGING_ONLY
